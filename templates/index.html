@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Document Assistant</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 2rem;
+            background-color: #f9f9f9;
+        }
+        .doc {
+            background: #fff;
+            border: 1px solid #ccc;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        .thumb {
+            float: left;
+            margin-right: 1rem;
+            border: 1px solid #999;
+        }
+        .preview-hover {
+            position: relative;
+            display: inline-block;
+        }
+        .preview-hover .preview {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 120px;
+            z-index: 10;
+            width: 900px;
+            height: auto;
+            border: 2px solid #444;
+            background-color: #fff;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+        }
+        .preview-hover:hover .preview {
+            display: block;
+        }
+        button {
+            margin-top: 0.5rem;
+            padding: 0.4rem 0.8rem;
+            font-size: 0.9rem;
+            border: none;
+            background-color: #3b82f6;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #2563eb;
+        }
+        .clearfix::after {
+            content: "";
+            display: block;
+            clear: both;
+        }
+    </style>
+</head>
+<body>
+    <h1>📁 Document Assistant</h1>
+
+    {% if documents|length == 0 %}
+        <p>No documents found.</p>
+    {% endif %}
+
+    {% for doc in documents %}
+    <div class="doc clearfix">
+        <div class="preview-hover">
+            <img src="{{ url_for('static', filename=doc.thumbnail_path.split('static/')[-1]) }}"
+                 alt="thumb"
+                 class="thumb"
+                 width="100">
+            <img src="{{ url_for('static', filename=doc.preview_path.split('static/')[-1]) }}"
+                 class="preview">
+        </div>
+        <h2>{{ doc.common_name }}</h2>
+        <p><strong>Filename:</strong> {{ doc.filename }}</p>
+        <p><strong>Keyword:</strong> {{ doc.keyword }} | <strong>Category:</strong> {{ doc.category }}</p>
+        <p>{{ doc.summary }}</p>
+
+        {% if doc.filename %}
+        <a href="{{ url_for('open_file', filename=doc.filename) }}" target="_blank">
+            <button>📂 Open in Edge</button>
+        </a>
+        {% endif %}
+    </div>
+    {% endfor %}
+</body>
+</html>

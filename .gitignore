@@ -1,0 +1,42 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+.venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Environment variables
+.env
+.env.*
+
+# Logs and temporary files
+*.log
+*.tmp
+*.bak
+
+# SQLite database (optional — include if generated locally)
+*.db
+*.sqlite3
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# VS Code settings (optional, if not shared)
+.vscode/
+
+# PyInstaller
+*.spec
+
+# Jupyter
+.ipynb_checkpoints/
+
+# PDF or text-based thumbnails
+static/thumbnails/
