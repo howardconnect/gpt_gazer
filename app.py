@@ -8,6 +8,14 @@ DB_PATH = "database.db"
 
 load_dotenv()  # ✅ ensure .env is loaded for WATCH_FOLDER
 
+@app.route("/api/documents")
+def api_documents():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    docs = conn.execute("SELECT * FROM documents ORDER BY date_added DESC").fetchall()
+    conn.close()
+    return [dict(doc) for doc in docs]
+
 @app.route("/open/<filename>")
 def open_file(filename):
     path = os.path.join(os.getenv("WATCH_FOLDER"), filename)
