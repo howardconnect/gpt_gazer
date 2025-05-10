@@ -136,3 +136,14 @@ def save_or_update_document(filepath, common_name, summary, keyword, file_size, 
         conn.close()
     except Exception as e:
         print(f"❌ Failed to save/update DB for {filepath}: {e}")
+
+def remove_from_db(filename):
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
+        cur.execute("DELETE FROM documents WHERE filename = ?", (filename,))
+        conn.commit()
+        conn.close()
+        print(f"🗑 Removed from DB: {filename}")
+    except Exception as e:
+        print(f"❌ DB deletion error for {filename}: {e}")

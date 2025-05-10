@@ -21,7 +21,7 @@ def run_startup_sync():
 
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-    cur.execute("SELECT filename, thumbnail_path, summary FROM documents WHERE archived = 0")
+    cur.execute("SELECT filename, thumbnail_path, summary FROM documents")
     db_rows = cur.fetchall()
 
     db_index = {row[0]: {"thumbnail": row[1], "summary": row[2]} for row in db_rows}
@@ -40,15 +40,15 @@ def run_startup_sync():
             else:
                 print(f"✅ Already complete: {file}")
 
-    # 🗂 Archive entries no longer in folder
+    # 🗑 Permanently delete DB entries for missing files
     db_filenames = set(db_index.keys())
     missing_files = db_filenames - actual_files
 
     if missing_files:
-        print(f"🗑 Archiving {len(missing_files)} missing files...")
+        print(f"🗑 Deleting {len(missing_files)} missing files from DB...")
         for missing in missing_files:
-            cur.execute("UPDATE documents SET archived = 1 WHERE filename = ?", (missing,))
-            print(f"📦 Archived missing file: {missing}")
+            cur.execute("DELETE FROM documents WHERE filename = ?", (missing,))
+            print(f"❌ Deleted from DB: {missing}")
         conn.commit()
 
     conn.close()
