@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Resolve Document Conflicts</title>
+    <style>
+        body {
+         <h1>⚠️ Document Conflicts</h1>
+
+    {% if conflicts|length == 0 %}
+        <div style="padding: 1rem; background-color: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; border-radius: 5px; margin-bottom: 2rem;">
+            ✅ No unresolved conflicts! Your document archive is clean.
+        </div>
+    {% endif %}
+
+    {% for conflict in conflicts %}
+    <div class="conflict">
+        <!-- existing + new summaries + buttons -->
+    </div>
+    {% endfor %}    
+            font-family: sans-serif;
+            margin: 2rem;
+            background-color: #f0f4f8;
+        }
+
+        h1 {
+            margin-bottom: 2rem;
+        }
+
+        .conflict {
+            background-color: #fff;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        }
+
+        .doc-section {
+            display: inline-block;
+            width: 45%;
+            vertical-align: top;
+            padding-right: 2%;
+        }
+
+        .diff {
+            background-color: #fef9c3;
+            padding: 1rem;
+            border-left: 4px solid #facc15;
+            margin-top: 1rem;
+            margin-bottom: 1rem;
+            font-style: italic;
+        }
+
+        .actions {
+            margin-top: 1rem;
+        }
+
+        form button {
+            padding: 0.5rem 1rem;
+            margin-right: 0.5rem;
+            font-size: 0.9rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .btn-keep {
+            background-color: #94a3b8;
+            color: white;
+        }
+
+        .btn-replace {
+            background-color: #4ade80;
+            color: black;
+        }
+
+        .btn-both {
+            background-color: #3b82f6;
+            color: white;
+        }
+
+        form button:hover {
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <h1>⚠️ Document Conflicts</h1>
+
+    {% if conflicts|length == 0 %}
+        <p>No unresolved conflicts.</p>
+    {% endif %}
+
+    {% for conflict in conflicts %}
+    <div class="conflict">
+        <div class="doc-section">
+            <h3>📄 Existing: {{ conflict.existing_filename }}</h3>
+            <p>{{ conflict.existing_summary }}</p>
+        </div>
+        <div class="doc-section">
+            <h3>📄 New: {{ conflict.new_filename }}</h3>
+            <p>{{ conflict.new_summary }}</p>
+        </div>
+
+        <div class="diff">
+            <strong>GPT Difference:</strong><br>
+            {{ conflict.diff_summary }}
+        </div>
+
+        <form action="/resolve_conflict" method="POST" class="actions">
+            <input type="hidden" name="conflict_id" value="{{ conflict.id }}">
+            <button name="action" value="keep_old" class="btn-keep">✅ Keep Original</button>
+            <button name="action" value="replace" class="btn-replace">🔁 Replace with New</button>
+            <button name="action" value="keep_both" class="btn-both">➕ Keep Both</button>
+        </form>
+    </div>
+    {% endfor %}
+</body>
+</html>

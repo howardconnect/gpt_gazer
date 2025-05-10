@@ -61,10 +61,17 @@
             display: block;
             clear: both;
         }
+        .header-buttons {
+            margin-bottom: 1rem;
+        }
     </style>
 </head>
 <body>
     <h1>📁 Document Assistant</h1>
+
+    <div class="header-buttons">
+        <a href="/conflicts"><button>⚠️ View Conflicts</button></a>
+    </div>
 
     {% if documents|length == 0 %}
         <p>No documents found.</p>
@@ -83,6 +90,9 @@
         <h2>{{ doc.common_name }}</h2>
         <p><strong>Filename:</strong> {{ doc.filename }}</p>
         <p><strong>Keyword:</strong> {{ doc.keyword }} | <strong>Category:</strong> {{ doc.category }}</p>
+        {% if doc.date_added %}
+            <p><strong>Uploaded On:</strong> {{ doc.date_added[:10] }}</p>
+        {% endif %}
         <p>{{ doc.summary }}</p>
 
         {% if doc.filename %}
