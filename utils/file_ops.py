@@ -7,12 +7,16 @@ from docx import Document
 from bs4 import BeautifulSoup
 from email import policy
 from email.parser import BytesParser
+from logger import logger  # ✅ use structured logging
+
+THUMBNAIL_DIR = "static/thumbnails"
+
 
 def generate_thumbnail(filepath):
     ext = os.path.splitext(filepath)[1].lower()
     filename = os.path.basename(filepath)
-    thumb_path = f"static/thumbnails/thumb_{filename}.jpg"
-    preview_path = f"static/thumbnails/preview_{filename}.jpg"
+    thumb_path = os.path.join(THUMBNAIL_DIR, f"thumb_{filename}.jpg")
+    preview_path = os.path.join(THUMBNAIL_DIR, f"preview_{filename}.jpg")
 
     try:
         if ext == ".pdf":
@@ -22,11 +26,9 @@ def generate_thumbnail(filepath):
             small = page.copy()
             small.thumbnail((200, 200))
             small.save(thumb_path, "JPEG", quality=85)
-
             page.save(preview_path, "JPEG", quality=95)
 
         else:
-            # Extract text content appropriately
             lines = []
 
             if ext in [".txt", ".md", ".log", ".json", ".xml", ".rtf"]:
@@ -38,7 +40,7 @@ def generate_thumbnail(filepath):
                     doc = Document(filepath)
                     lines = [p.text for p in doc.paragraphs if p.text.strip()]
                 except Exception as e:
-                    print(f"❌ Failed to read DOCX for thumbnail: {e}")
+                    logger.warning(f"❌ Failed to read DOCX for thumbnail: {e}")
                     lines = ["(Unreadable Word document)"]
 
             elif ext == ".html":
@@ -47,7 +49,7 @@ def generate_thumbnail(filepath):
                         soup = BeautifulSoup(f, "html.parser")
                         lines = soup.get_text(separator="\n").splitlines()
                 except Exception as e:
-                    print(f"❌ Failed to parse HTML for thumbnail: {e}")
+                    logger.warning(f"❌ Failed to parse HTML for thumbnail: {e}")
                     lines = ["(Unreadable HTML document)"]
 
             elif ext == ".eml":
@@ -58,7 +60,7 @@ def generate_thumbnail(filepath):
                         content = body.get_content() if body else "(No plain text body)"
                         lines = content.splitlines()
                 except Exception as e:
-                    print(f"❌ Failed to parse EML for thumbnail: {e}")
+                    logger.warning(f"❌ Failed to parse EML for thumbnail: {e}")
                     lines = ["(Unreadable email)"]
 
             preview_text = "\n".join(lines[:25]) or "(Empty File)"
@@ -78,11 +80,13 @@ def generate_thumbnail(filepath):
             small.thumbnail((200, 200))
             small.save(thumb_path, "JPEG", quality=85)
 
+        logger.info(f"🖼️ Thumbnails generated: {thumb_path}, {preview_path}")
+        return thumb_path, preview_path
+
     except Exception as e:
-        print(f"❌ Thumbnail error for {filename}: {e}")
+        logger.exception(f"❌ Thumbnail generation failed for {filename}: {e}")
         return "", ""
 
-    return thumb_path, preview_path
 
 def hash_file(filepath):
     hasher = hashlib.sha256()
@@ -92,29 +96,39 @@ def hash_file(filepath):
             hasher.update(buf)
         return hasher.hexdigest()
     except Exception as e:
-        print(f"❌ Hashing error for {filepath}: {e}")
+        logger.exception(f"❌ Hashing error for {filepath}: {e}")
         return ""
+
 
 def rename_file(filepath, new_filename):
     folder = os.path.dirname(filepath)
     ext = os.path.splitext(filepath)[1]
+
+    # Add extension if missing
     if not new_filename.endswith(ext):
         new_filename += ext
+
+    base_name = os.path.splitext(new_filename)[0]
+    counter = 1
     new_path = os.path.join(folder, new_filename)
 
-    if new_path == filepath:
-        return filepath
+    while os.path.exists(new_path):
+        new_filename = f"{base_name}_{counter}{ext}"
+        new_path = os.path.join(folder, new_filename)
+        counter += 1
 
     for attempt in range(5):
         try:
             os.rename(filepath, new_path)
+            if counter > 1:
+                logger.info(f"✏️ Rename collision handled — new file named: {new_filename}")
             return new_path
         except PermissionError:
-            print(f"⏳ File locked during rename, retrying: {filepath}")
+            logger.warning(f"⏳ File locked during rename, retrying: {filepath}")
             time.sleep(1)
         except Exception as e:
-            print(f"❌ Rename error: {e}")
+            logger.exception(f"❌ Rename error for {filepath}: {e}")
             break
 
-    print(f"❌ Failed to rename after retries: {filepath}")
+    logger.error(f"❌ Failed to rename after retries: {filepath}")
     return filepath

@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from utils.extractors import extract_text_from_file
 from utils.gpt_client import summarize_with_gpt
 from utils.file_ops import generate_thumbnail, hash_file, rename_file
+from logger import logger  # ✅ added logger
 
 # Load environment and check watch folder
 load_dotenv()
@@ -33,30 +34,30 @@ def process_file(filepath, source="watcher"):
             with open(filepath, "rb"):
                 break
         except PermissionError:
-            print(f"⏳ File is locked, retrying: {filepath}")
+            logger.warning(f"⏳ File is locked, retrying: {filepath}")
             time.sleep(1)
     else:
-        print(f"❌ File remained locked: {filepath}")
+        logger.error(f"❌ File remained locked: {filepath}")
         return
 
     try:
         ext = os.path.splitext(filepath)[1].lower()
         if ext not in VALID_EXTENSIONS:
-            print(f"⚠️ Unsupported file type: {filepath}")
+            logger.warning(f"⚠️ Unsupported file type: {filepath}")
             return
 
-        print(f"\n📄 Processing ({source}): {filepath}")
+        logger.info(f"📄 Processing ({source}): {filepath}")
         filename = os.path.basename(filepath)
         file_size = os.path.getsize(filepath)
 
         text = extract_text_from_file(filepath)
         if not text.strip():
-            print(f"❌ No text extracted from {filename}")
+            logger.error(f"❌ No text extracted from {filename}")
             return
 
         chunks = chunk_text(text, max_tokens=3000)
         result = summarize_with_gpt(chunks[0])
-        print(f"🤖 GPT Result: {result}")
+        logger.info(f"🤖 GPT title: {result.get('filename')} | summary preview: {result.get('summary', '')[:100]}...")
 
         new_name    = result.get("filename", filename)
         common_name = result.get("common_name", os.path.splitext(filename)[0])
@@ -64,27 +65,31 @@ def process_file(filepath, source="watcher"):
         keyword     = result.get("keyword", "Uncategorized")
         category    = result.get("category", "Unsorted")
 
-        new_path   = rename_file(filepath, new_name)
-        final_path = new_path
+        final_path = rename_file(filepath, new_name)
+        filename = os.path.basename(final_path)  # ✅ normalized filename used for DB
 
         thumb_path, preview_path = generate_thumbnail(final_path)
+
+        if not thumb_path or not preview_path:
+            logger.warning(f"⚠️ Thumbnails not generated for: {filename}")
+
         file_hash = hash_file(final_path)
 
         save_or_update_document(
-            final_path, common_name, summary, keyword,
+            filename, final_path, common_name, summary, keyword,
             file_size, category, file_hash, thumb_path, preview_path
         )
 
-        print(f"✅ Indexed and saved: {final_path}")
+        logger.info(f"✅ Indexed and saved: {final_path}")
 
     except Exception as e:
-        print(f"❌ Error processing file {filepath}: {e}")
+        logger.exception(f"❌ Error processing file {filepath}: {e}")
 
 def chunk_text(text, max_tokens=3000):
     chunk_size = max_tokens * 4
     return [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
 
-def save_or_update_document(filepath, common_name, summary, keyword, file_size, category, file_hash, thumb, preview):
+def save_or_update_document(filename, filepath, common_name, summary, keyword, file_size, category, file_hash, thumb, preview):
     try:
         conn = sqlite3.connect(DB_PATH)
         cur = conn.cursor()
@@ -92,13 +97,13 @@ def save_or_update_document(filepath, common_name, summary, keyword, file_size, 
         # 🧠 Check if this exact hash is already in the DB under another filename
         cur.execute("SELECT filename FROM documents WHERE hash = ?", (file_hash,))
         dupe = cur.fetchone()
-        if dupe and dupe[0] != os.path.basename(filepath):
-            print(f"⚠️ Duplicate content detected — already saved as: {dupe[0]}")
+        if dupe and dupe[0] != filename:
+            logger.warning(f"⚠️ Duplicate content detected — already saved as: {dupe[0]}")
             conn.close()
             return
 
         # Check if filename already exists
-        cur.execute("SELECT 1 FROM documents WHERE filename = ?", (os.path.basename(filepath),))
+        cur.execute("SELECT 1 FROM documents WHERE filename = ?", (filename,))
         exists = cur.fetchone()
 
         if exists:
@@ -117,25 +122,25 @@ def save_or_update_document(filepath, common_name, summary, keyword, file_size, 
             """, (
                 common_name, summary, keyword, file_size, category,
                 file_hash, thumb, preview, datetime.now().isoformat(),
-                os.path.basename(filepath)
+                filename
             ))
-            print(f"🔄 Updated record: {filepath}")
+            logger.info(f"🔄 Updated record: {filepath}")
         else:
             cur.execute("""
                 INSERT INTO documents 
                 (filename, common_name, summary, keyword, file_size, category, hash, thumbnail_path, preview_path, date_added)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                os.path.basename(filepath), common_name, summary, keyword,
+                filename, common_name, summary, keyword,
                 file_size, category, file_hash, thumb, preview,
                 datetime.now().isoformat()
             ))
-            print(f"🆕 Inserted new record: {filepath}")
+            logger.info(f"🆕 Inserted new record: {filepath}")
 
         conn.commit()
         conn.close()
     except Exception as e:
-        print(f"❌ Failed to save/update DB for {filepath}: {e}")
+        logger.exception(f"❌ Failed to save/update DB for {filepath}: {e}")
 
 def remove_from_db(filename):
     try:
@@ -144,6 +149,50 @@ def remove_from_db(filename):
         cur.execute("DELETE FROM documents WHERE filename = ?", (filename,))
         conn.commit()
         conn.close()
-        print(f"🗑 Removed from DB: {filename}")
+        logger.info(f"🗑 Removed from DB: {filename}")
     except Exception as e:
-        print(f"❌ DB deletion error for {filename}: {e}")
+        logger.exception(f"❌ DB deletion error for {filename}: {e}")
+
+def repair_thumbnails_for_db():
+    logger.info("🛠️ Starting thumbnail repair...")
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
+        cur.execute("SELECT filename FROM documents")
+        files = cur.fetchall()
+        conn.close()
+
+        for (filename,) in files:
+            full_path = os.path.join(WATCH_FOLDER, filename)
+            if not os.path.exists(full_path):
+                logger.warning(f"❌ File missing for repair: {filename}")
+                continue
+
+            thumb_name = f"thumb_{filename}.jpg"
+            preview_name = f"preview_{filename}.jpg"
+            thumb_path = os.path.join("static/thumbnails", thumb_name)
+            preview_path = os.path.join("static/thumbnails", preview_name)
+
+            if not os.path.exists(thumb_path) or not os.path.exists(preview_path):
+                logger.info(f"🔁 Regenerating thumbnails for: {filename}")
+                new_thumb, new_preview = generate_thumbnail(full_path)
+                if new_thumb and new_preview:
+                    conn = sqlite3.connect(DB_PATH)
+                    cur = conn.cursor()
+                    cur.execute("""
+                        UPDATE documents SET
+                            thumbnail_path = ?,
+                            preview_path = ?,
+                            date_added = ?
+                        WHERE filename = ?
+                    """, (new_thumb, new_preview, datetime.now().isoformat(), filename))
+                    conn.commit()
+                    conn.close()
+                    logger.info(f"✅ Thumbnails repaired: {filename}")
+                else:
+                    logger.warning(f"⚠️ Failed to regenerate thumbnails for: {filename}")
+
+        logger.info("✅ Thumbnail repair complete.")
+
+    except Exception as e:
+        logger.exception(f"❌ Thumbnail repair failed: {e}")
